@@ -1,6 +1,10 @@
 const express = require('express');
 const cors = require('cors');
 
+const adminRoutes = require('./routes/admin');
+const dashboardRoutes = require('./routes/dashboard');
+const { computeFraudScore } = require('./services/fraudScoring');
+
 const app = express();
 const PORT = process.env.PORT || 3001;
 
@@ -11,6 +15,7 @@ app.get('/', (req, res) => {
   res.send('Fraud Detection API Running');
 });
 
+// Existing /analyze endpoint preserved, now uses helper
 app.post('/analyze', (req, res) => {
   const {
     transactionAmount = 0,
@@ -20,44 +25,24 @@ app.post('/analyze', (req, res) => {
     rapidTransactions = false,
   } = req.body || {};
 
-  let fraudScore = 0;
-  const explanation = [];
-
-  if (transactionAmount > 3 * usualAmount) {
-    fraudScore += 40;
-    explanation.push('Amount is much higher than usual');
-  }
-
-  if (deviceChanged) {
-    fraudScore += 30;
-    explanation.push('You are using a new device');
-  }
-
-  if (locationChanged) {
-    fraudScore += 20;
-    explanation.push('You are in a new place');
-  }
-
-  if (rapidTransactions) {
-    fraudScore += 25;
-    explanation.push('Many quick transactions happened');
-  }
-
-  fraudScore = Math.min(fraudScore, 100);
-
-  let riskLevel = 'Low';
-  if (fraudScore >= 61) {
-    riskLevel = 'High';
-  } else if (fraudScore >= 31) {
-    riskLevel = 'Medium';
-  }
+  const result = computeFraudScore({
+    transactionAmount,
+    usualAmount,
+    deviceChanged,
+    locationChanged,
+    rapidTransactions,
+  });
 
   res.json({
-    fraudScore,
-    riskLevel,
-    explanation,
+    fraudScore: result.fraudScore,
+    riskLevel: result.riskLevel,
+    explanation: result.explanation,
   });
 });
+
+// New routes
+app.use('/admin', adminRoutes);
+app.use('/dashboard', dashboardRoutes);
 
 app.listen(PORT, () => {
   console.log(`Fraud Detection API Running on port ${PORT}`);
